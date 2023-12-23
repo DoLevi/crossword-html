@@ -8,30 +8,20 @@ const COLUMNS = 4;
 
 const content = csvParse.parse(fs.readFileSync(SOURCE_FILE), {bom: true, delimiter: "\t", quote: false});
 
-const {ownerMap} = cwg.default(content.map(c => c[0])) // then you can draw the crossword by this result
+const {positionObjArr, width, height} = cwg.default(content.map(c => c[0]));
 
-const wordMap = new Map();
-
-const crossword = [];
-
-for (let x = 0; x < ownerMap.length; x++) {
-    const row = [];
-    crossword.push(row);
-    for (let y = 0; y < ownerMap[x].length; y++) {
-        const cell = ownerMap[x][y];
-        if (!cell) {
-            row.push({});
-            continue;
+const crossword = Array.from({length: width}, () => Array.from({length: height}, () => ({occupied: false, wordNum: []})));
+for (const word of positionObjArr) {
+    crossword[word.xNum][word.yNum].wordNum.push(content.findIndex(elem => elem[0] === word.wordStr));
+    if (word.isHorizon) {
+        for (let x = word.xNum; x < word.xNum + word.wordStr.length; x++) {
+            crossword[x][word.yNum].occupied = true;
+            crossword[x][word.yNum].wordStr = word.wordStr;
         }
-        const crosswordCell = {letter: cell.letter};
-        row.push(crosswordCell);
-        if (cell.v && !wordMap.has(cell.v)) {
-            wordMap.set(cell.v, {x, y});
-            crosswordCell.num = cell.v;
-        }
-        if (cell.h && !wordMap.has(cell.h)) {
-            wordMap.set(cell.h, {x, y});
-            crosswordCell.num = cell.h;
+    } else {
+        for (let y = word.yNum; y < word.yNum + word.wordStr.length; y++) {
+            crossword[word.xNum][y].occupied = true;
+            crossword[word.xNum][y].wordStr = word.wordStr;
         }
     }
 }
@@ -40,7 +30,7 @@ const hints = content.map((c, idx) => `<tr><td>${idx + 1}.</td><td>${c[1]}</td><
 let hintsTables = [];
 const ROWS = Math.ceil(hints.length / COLUMNS);
 for (let i = 0; i < COLUMNS; i++) {
-    hintsTables.push(`<table>${hints.slice(i * ROWS, (i + 1) * ROWS).join("")}</table>`)
+    hintsTables.push(`<table>${hints.slice(i * ROWS, (i + 1) * ROWS).join("")}</table>`);
 }
 
 const css = "" +
@@ -54,6 +44,17 @@ const css = "" +
     "  font-size: 9px;" +
     "  text-align: left;" +
     "  vertical-align: text-top;" +
+    "}" +
+    ".relative {" +
+    "  position: relative;" +
+    "}" +
+    ".left {" +
+    "  position: absolute;" +
+    "  transform: translateX(-60%);" +
+    "}" +
+    ".upper {" +
+    "  position: absolute;" +
+    "  transform: translateY(-50%);" +
     "}";
 
 let html = `<html><style>${css}</style><body><table style="border-spacing: 0;">`;
@@ -61,9 +62,12 @@ let html = `<html><style>${css}</style><body><table style="border-spacing: 0;">`
 for (const row of crossword) {
     html += "<tr>";
     for (const cell of row) {
-        if (cell.num) {
-            html += `<td class="cell letter">${cell.num}</td>`;
-        } else if (cell.letter) {
+        if (cell.wordNum.length === 1) {
+            html += `<td class="cell letter">${cell.wordNum[0] + 1}</td>`;
+        } else if (cell.wordNum.length === 2) {
+            const numElements = `<div class="cell left">${cell.wordNum[0] + 1}</div><div class="cell upper">${cell.wordNum[1] + 1}</div>`;
+            html += `<td class="cell letter relative">${numElements}</td>`;
+        } else if (cell.occupied) {
             // html += `<td>${cell.letter}</td>`;
             html += `<td class="cell letter"></td>`;
         } else {
